@@ -82,6 +82,11 @@ cannot overwrite or delete the ones already there. Measured on a Windows portabl
 | `fs.rmSync` / `unlink` from node | `EPERM` (with or without an injected Node shim) |
 
 So the pattern is **`rm -f` then `cp`**, one file at a time, with `cmp -s` after every copy.
+**Probe with a plain `cp` first, though** — the block belongs to the volume's current state, not
+to the drive letter. Measured again on the same portable drive a few hours after the table above:
+plain `cp` over existing files succeeded, and a Python `os.remove` + `zipfile` rebuild of the
+`.zip` worked too. Only fall back to `rm -f` + `cp` when the plain `cp` is actually denied.
+
 Two ways to destroy data this way, both hit in practice:
 
 - **Never `rm` before a copy whose source path is relative** to a directory you only `cd`'d
