@@ -89,12 +89,22 @@ The same skeleton in Simplified Chinese, for reference:
 - **When it's mandatory**: blocks that do dozens to hundreds of actions in one go, where a rendered intermediate state would look bad or stutter. The classics are
   **batch stamping** (clear the screen + redraw the whole scene `图章` (stamp) by stamp) and **list rebuilds**. Without warp, every loop iteration yields,
   and you see half-drawn intermediate frames — especially obvious with a long snake.
+- **A hat fed by a repeated broadcast must be warp, or it never finishes.** `event_whenbroadcastreceived` is registered with `restartExistingThreads: true`,
+  so every broadcast **restarts** a still-running receiver thread from the top block (`Runtime.startHats` → `_restartThread`). Broadcast the same message
+  every frame (a per-frame `刷新…`) and a non-warp receiver whose body contains a `重复` loop is reset every frame: it gets one iteration per frame and
+  never reaches the end. Measured on the tetris example — a `重复 (16)` scan inside `当收到("刷新方块")` sat at loop counter 1 forever, so the piece never
+  drew; wrapping the same loop in a `定义 渲染方块 不刷新:` and calling it from the hat fixed it instantly. Put the *whole* loop in the warp block, not
+  just the call.
 - **When it's absolutely forbidden**: the block contains `等待` (wait) / `说等待` (say for seconds), or calls a block that does. Inside a warp frame,
   `wait` doesn't yield properly and just spins until the warp deadline (in scratch-vm, `Sequencer.WARP_TIME` = 500ms)
   before it emits. Keep time-waiting flows in ordinary blocks; carve out only the "pure computation / batch drawing" part.
 - warp **inherits down the call chain** (`_StackFrame.create(parent.warpMode)`): blocks called from a warp block also become warp,
   so don't indirectly reach a block containing `等待` from inside a warp block.
 - A variable used inside a custom block must still be declared (as a global, or `私有`/`局部` in the sprite) — a custom block does not implicitly introduce variables.
+- **Define before you call.** Procedures are collected in a first pass, but `proc.argIds` / `proc.proccode` are only filled in by `emitProc`, so a call to a
+  block whose `定义` appears *later* in the same sprite dies with
+  `Internal error: TypeError: Cannot read properties of undefined (reading 'forEach')` — not a friendly "undefined custom block" message. Order the
+  definitions by dependency (`检测` → `锁定` → `下落一格`) and put the hats last. Mutual recursion is therefore not expressible today.
 
 ## Indentation and block boundaries
 
