@@ -13,6 +13,9 @@ actually running it, and package a Windows build.
 Drop the folder into your agent's skills directory — for WorkBuddy AI that is
 `~/.workbuddy-ai/skills/` — or import the repository as a skill.
 
+[`pseudo2sb3-dev.zip`](pseudo2sb3-dev.zip) is the same six files packaged under a
+`pseudo2sb3-dev/` prefix, for when you would rather just unzip it into place.
+
 ## Layout
 
 | Path | What's in it |
