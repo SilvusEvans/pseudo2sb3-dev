@@ -1,6 +1,6 @@
 ---
 name: pseudo2sb3-dev
-description: Develop or use pseudo2sb3, the "pseudocode → Scratch .sb3" tool (Electron; compiles to TurboWarp + Stretch; UI and pseudocode support 简体中文/繁體中文/English/日本語; brand SilvusEvans) — write .pseudo tutorial scripts, compile and export .sb3 from the CLI, add blocks to the compiler / change the DSL / change emission shape, add or change a language's UI strings and block aliases, inspect any .sb3's slots and variable registration, verify a real TurboWarp web import by actually running it, package a Windows portable exe. Use when the user mentions pseudo2sb3, 伪代码转 sb3, Scratch block metadata/catalog/别名与下拉菜单, 多语言/i18n, TurboWarp 导入验证, or asks how a block's slot/menu should be emitted.
+description: Develop or use pseudo2sb3, the "pseudocode → Scratch .sb3" tool (Electron; compiles to TurboWarp + Stretch; UI and pseudocode support 简体中文/繁體中文/English/日本語; brand SilvusEvans) — write .pseudo tutorial scripts, compile and export .sb3 from the CLI, decompile a .sb3 back into pseudocode (反解), add blocks to the compiler / change the DSL / change emission shape, add or change a language's UI strings and block aliases, inspect any .sb3's slots and variable registration, verify a real TurboWarp web import by actually running it, package a Windows portable exe. Use when the user mentions pseudo2sb3, 伪代码转 sb3, 反解 / 逆向解析 / decompile, Scratch block metadata/catalog/别名与下拉菜单, 多语言/i18n, TurboWarp 导入验证, or asks how a block's slot/menu should be emitted.
 argument-hint: "[.pseudo path | block to add | repo dir]"
 ---
 
@@ -24,12 +24,13 @@ Architectural decision (do not relitigate): **the source of scratch-vm / scratch
 | What the user wants to do | Which path to take |
 |:--|:--|
 | Write/change a `.pseudo` (tutorial script, example project) | `references/dsl.md` for syntax → `scripts/vocab.mjs --grep keyword` to look up how a block is written → compile → `scripts/inspect-sb3.mjs` to see the shape |
-| Make it *feel* like a game (inertia, thrust, wrap, particles, screen shake, HUD readout) | `references/game-feel.md` — every idiom is measured in `examples/asteroids/verify.mjs`; also the place for "why the 镜头 blocks did nothing" |
+| Make it *feel* like a game (inertia, thrust, wrap, particles, screen shake, white flash, HUD readout, an animated score, sound) | `references/game-feel.md` — every idiom is measured in `examples/asteroids/verify.mjs`; also the place for "why the 镜头 blocks did nothing" and "why `播放声音并等待` hangs a headless run" |
 | Verify an example really plays | `node examples/<name>/verify.mjs` (real scratch-vm) — conventions and traps in `references/workflow.md` §"Per-example asset + verification harness" |
 | Verify an example in a **real browser** (pixel `碰到`, HUD DOM, real keys) | `node examples/<name>/browser-verify.mjs` — web-build API deltas are listed in `references/workflow.md` §"What the TurboWarp web build exposes differently" |
 | Translate an example into another language | Follow `examples/snake-en.pseudo`: swap only the identifiers + alias/menu labels (fetch them live with `vocab.mjs --lang xx`), then pin the two sides as equivalent with a "structure fingerprint" and a real-VM assertion |
 | Add a block to the tool / wire up an extension | `references/workflow.md` "Standard moves for adding a block" — the 6 steps must stay in order |
 | Inspect some `.sb3` (your own artifact or an officially downloaded project) | `scripts/inspect-sb3.mjs file.sb3 [--opcode OP]` — it decodes slots, variable registration, and substack back-pointers |
+| Turn a `.sb3` back into pseudocode (反解 / decompile), or debug why the restored text lost blocks | `references/decompile.md` — CLI / desktop entry points, the `[1/2/3]` slot-tag table (tag 3 = obscured shadow: read `slot[1]`, never `slot[2]`), the "what the DSL cannot express" table, and the round-trip + real-TurboWarp verification commands |
 | Change the Electron UI / export flow | `npm run smoke` (`electron test/electron-smoke.cjs` is the end-to-end assertion) |
 | Add/change a language (UI strings, block aliases, menu labels) | The "Multilingual (i18n)" section below — change each of the two chains separately |
 | Release | `npm run dist` + the two checks in `references/workflow.md` "Packaging and artifact verification" |
@@ -95,8 +96,9 @@ Three easy traps:
 **Examples are language-aware too**: the default example loaded by the "Example" button in the UI (and by an `example` action with no name) is decided by the **UI language**, via `defaultExampleFile()` in `electron/main.cjs`; if that language's variant is missing it falls back to the English one. Every file is named `<english-name>-<lang>.pseudo` — no language gets a bare name — so the set is `hello-en.pseudo` / `hello-zh-Hans.pseudo` /
 `hello-zh-Hant.pseudo` / `hello-ja.pseudo`. The examples **listed individually** in the "Load example" menu are still loaded by name (the user clicked a specific file) and are not language-filtered. To add a language variant: add the file → no menu changes needed (the menu scans `examples/` and takes each label from the file's first-line comment) → the default-example logic picks it up automatically. `electron-smoke.cjs` switches to English, clicks "Example" once, and asserts it gets `hello-en.pseudo`.
 
-After any change, always run: `npm run check-catalog` → `npm test` (88 items, including the four-language hello and both the Chinese and English snake examples run for real under green flag in a real scratch-vm)
-→ `npm run smoke` (58 end-to-end items, last line `SMOKE PASS`). **Smoke requires a real GUI desktop session**: with no display,
+After any change, always run: `npm run check-catalog` → `npm test` (96 items, including the four-language hello, the Chinese/English snake examples
+run for real under green flag in a real scratch-vm, and the 反解 round-trip + foreign-project tests)
+→ `npm run smoke` (67 end-to-end items, last line `SMOKE PASS`; the decompile steps ride along, so touching the renderer means re-running it). **Smoke requires a real GUI desktop session**: with no display,
 Electron never starts, the process hangs and prints nothing — don't retry it, first confirm you're in a desktop session.
 
 ## Working on a write-protected copy
@@ -129,7 +131,7 @@ Other notes for such a copy:
 
 - `node_modules` (complete, including Electron) and `.ref` may already be present — check
   before reinstalling. `.ref` is just vendored sources and is safe to copy or skip.
-- `npm test` and `npm run check-catalog` run fine there (88 tests).
+- `npm test` and `npm run check-catalog` run fine there (96 tests).
 - A `dist/` directory in such a copy is probably a stale build; re-run `npm run dist` if you
   need an exe that matches the current source.
 - Some agent harnesses inject a Node shim through `NODE_OPTIONS=--require=…`;
@@ -140,8 +142,9 @@ Other notes for such a copy:
 ```bash
 cd <repo dir>
 npm run check-catalog                  # trace metadata back to source files and compare
-npm test                               # shape assertions + scratch-parser + real scratch-vm execution
+npm test                               # shape assertions + scratch-parser + real scratch-vm execution + 反解 round trip
 node src/cli.js input.pseudo -o out/out.sb3 --parse-check
+node src/cli.js out/out.sb3 -o out/back.pseudo        # 反解：输入是 .sb3 时自动翻转方向
 npm run start                          # Electron desktop app (example menu auto-scans examples/)
 npm run dist                           # Windows portable
 ```
@@ -168,7 +171,12 @@ See the DoD in `references/workflow.md`: the whole verification chain green **an
 ## Boundaries
 
 Deliberately not done: return values from custom blocks, `sensing_of` (the options are only known at runtime), and dropdown menus for hardware extensions (microbit/wedo2/ev3/boost/makeymakey/gdxfor/text2speech).
-Planned but not implemented: reverse import `.sb3 → pseudocode` (needs a decompiler + a round-trip histogram comparison).
+Reverse import `.sb3 → pseudocode` (反解) **is** implemented (2026-10-03): `src/core/decompile.js`,
+the CLI (a `.sb3` input flips the direction), and the desktop app (文件 → 反解 Scratch 工程,
+`Ctrl+Shift+O`). Its own boundaries: a `procedures_callreturn` loses its return value (same limit as
+the compiler above), sprite x/y/size/direction/rotationStyle have no declaration form in the DSL, and
+an empty C-block body / a hat-less stack / a list's initial contents can only survive as comments —
+all of those are reported as `problems` rather than dropped quietly. See `references/decompile.md`.
 
 Known i18n gaps: dropdown options for hardware extensions (microbit/wedo2/…) have no zh-Hant/ja labels, so they can only be written in Chinese or in the English original;
 the multilingual labels for the `drum` / `instrument` menus are hand-maintained (`MENU_I18N`) and must be re-checked after an extension version bump.
@@ -176,12 +184,14 @@ the multilingual labels for the `drum` / `instrument` menus are hand-maintained 
 ## Resources
 
 - `references/dsl.md` — pseudocode syntax: skeleton, indentation, assignment/mutation, menu params must be quoted, operators, custom blocks and `不刷新` (warp), prefer SVG assets, **HUD monitor syntax (`显示变量(名, "模式", x, y)`)**, known unsupported forms (incl. why the Scratch 2 镜头 blocks are no-ops)
-- `references/game-feel.md` — game-feel playbook from `examples/asteroids`: frame pump (`广播并等待` + warp), thrust decomposition (**x ← sin, y ← cos**, why the textbook pair is 90° off), angular inertia, damping, Pythagorean speed cap **and the sequential-assignment snapshot trap**, one-line 取余 screen wrap, timer-derived blink, clone particles with drag+shrink+fade, screen shake via **stage effects** because camera blocks do nothing, and the pause/cooldown/cleanup gate rules
+- `references/game-feel.md` — game-feel playbook from `examples/asteroids`: frame pump (`广播并等待` + warp), thrust decomposition (**x ← sin, y ← cos**, why the textbook pair is 90° off), angular inertia, damping, Pythagorean speed cap **and the sequential-assignment snapshot trap**, one-line 取余 screen wrap, timer-derived blink, clone particles with drag+shrink+fade, screen shake via **stage effects** because camera blocks do nothing, **full-stage white-flash overlay**, an **eased counter behind a monitor**, synthesized WAV + 音调 jitter (incl. why `播放声音并等待` deadlocks a headless harness), and the pause/cooldown/cleanup gate rules
 - `references/sb3-format.md` — `.sb3` block-graph shape: slot encoding `[1/2/3]`, primitive type numbers, variables and lists registered by **key**, static dropdowns as fields vs dynamic menus as shadow blocks, list-index `all/last/random` semantics, TurboWarp `toJSON()` under-reporting, **`monitors[]` (MonitorRecord) shape and the first-script visibility rule**, and why the web build's `toJSON()` is a *string* (property reads off it silently `undefined`)
+- `references/decompile.md` — the 反解 path: CLI/desktop entry points and their output contract, the slot-tag table with the **obscured-shadow (tag 3) trap**, the ambiguous tag-2 rule (`inputs[].stmt` first, then `procedures_call` vs `procedures_callreturn`), the full "what the DSL cannot express → which comment + which problem" table, and the three verification layers (fingerprint round trip, `npm run smoke`, `turbowarp-import-check.mjs`)
 - `references/workflow.md` — project workflow: the 6 steps for adding a block, five historical lessons, the verification-chain commands, **the per-example `gen-assets.mjs` / `verify.mjs` harness conventions (headless `碰到` limitation, wall-clock frame stepping, sampling decaying values)**, the operational order and traps for verifying TurboWarp in the built-in browser, packaging verification
 - `scripts/vocab.mjs` — exports the available block list from the project catalog (`--group`/`--grep`/`--lang`/`--json`)
 - `scripts/inspect-sb3.mjs` — zero-dependency `.sb3` unpacking and structural self-check; runs on any project. Its overview dumps **`monitors[]`** (mode, `VARIABLE`, x/y, range, hidden flag), per-target block/script/variable counts, and the opcode histogram.
-- `scripts/turbowarp-verify.mjs` — **real-browser** verification + screenshot: drives local Edge (playwright-core) to turbowarp.org/editor, injects the `.sb3` into `window.vm`, presses real keys, screenshots the 480×360 stage canvas at the flame frame, and asserts "before the green flag only 玩家 is visible" / "火力 = 2" / "blast never exceeds 2 cells" / "no JS errors". `node scripts/turbowarp-verify.mjs [sb3] [out.png]`. This is the check that a node-only scratch-vm run cannot replace — it catches import-time rendering, real keyboard, and saved-visibility problems. Its per-example sibling is `<repo dir>/examples/asteroids/browser-verify.mjs` (29 asserts: monitors read back out of the web VM **and** off the HUD DOM, real-key turning/thrust/fire, pixel collision, shake effects, pause, wrap, game over, 3 screenshots into `out/`).
+- `scripts/turbowarp-import-check.mjs` — the real-browser check for **decompilation** (the decompile twin of `turbowarp-verify.mjs` below): `node scripts/turbowarp-import-check.mjs <original.sb3> <roundtrip.sb3> [png-prefix]` loads both into turbowarp.org/editor and diffs per-target real-block / hat / custom-block / variable / list / monitor counts plus a green-flag run for JS errors. Use it whenever a `.sb3` you did not compile yourself is involved — it catches slot-shape misreads that the node-side fingerprint test cannot see (shadow blocks are counted separately on purpose; `Target.blocks` is a BlockContainer, so count `._blocks`).
+- `scripts/turbowarp-verify.mjs` — **real-browser** verification + screenshot: drives local Edge (playwright-core) to turbowarp.org/editor, injects the `.sb3` into `window.vm`, presses real keys, screenshots the 480×360 stage canvas at the flame frame, and asserts "before the green flag only 玩家 is visible" / "火力 = 2" / "blast never exceeds 2 cells" / "no JS errors". `node scripts/turbowarp-verify.mjs [sb3] [out.png]`. This is the check that a node-only scratch-vm run cannot replace — it catches import-time rendering, real keyboard, and saved-visibility problems. Its per-example sibling is `<repo dir>/examples/asteroids/browser-verify.mjs` (41 asserts: monitors read back out of the web VM **and** off the HUD DOM, real-key turning/thrust/fire, pixel collision, shake effects, the white flash visibly covering the stage, sound reaching the audio engine via a wrapped `soundBank.playSound`, pause, wrap, game over, 4 screenshots into `out/`).
 
 Repo files related to i18n (not inside this skill dir; they live with the repo):
 
@@ -193,15 +203,21 @@ Repo files related to i18n (not inside this skill dir; they live with the repo):
 - `<repo dir>/examples/bomberman/bomberman-zh-Hans.pseudo` + `gen-assets.mjs` (all-vector SVGs under `assets/bomberman/`) + `verify.mjs` — a complete, playable **classic Bomberman** (13×11 grid, ~930 blocks, 8 targets, no extensions): arrow-key movement + space to drop bombs, cross-shaped blast with brick destruction and chain detonation, patrolling/chasing enemies, kill-all-or-reach-exit win, score + level progression, seven-segment HUD. Read it for: a **four-clone-pool** design (143 board cells + 8 bombs + 40 flames + 4 enemies), the `私有` per-clone state pattern, the `不刷新` batch-clone startup, and every trap in the playbook above in the wild. `verify.mjs` is the real-scratch-vm harness (green flag → move → bomb → explode → enemy AI → blast range → saved visibility, asserts stage variables/lists). Blast range is the single variable `火力` (default **2**), set both at declaration and in `初始化`.
 - `<你的项目目录>\Scratch\Making\炸弹人` — **user project (personal path, not in repo)**, the standalone deliverable copy of the Bomberman above: `炸弹人.pseudo`, `gen-assets.mjs`, `assets/bomberman/`, `playtest.mjs` (real-scratch-vm assertions), and `out/炸弹人.sb3` + `out/turbowarp-运行截图.png` / `out/turbowarp-运行截图-打开工程.png` (the latter proves the pool originals are hidden before the green flag). Sync the repo copy and this folder together.
 - `<repo dir>/examples/tetris-zh-Hans.pseudo` + `scripts/make-tetris-assets.mjs` — the largest example (580 blocks, 225 runtime targets) and the reference for anything grid-shaped. Worth reading for: the clone-pool board (200 cells, one private `格号` each, rendered only on a `刷新棋盘` broadcast), the 448-char `形状数据` string (7 pieces × 4 rotations × 4×4, spawn states written by hand and the rest derived by a real rotation so the table can't drift), the polled-key input with per-key cooldowns (no `当按键按下` hats), the `不刷新` render blocks behind per-frame broadcasts, and the 10-clone seven-segment digit HUD that avoids `显示变量` watchers. Its behaviour is pinned by `test/tetris.test.mjs`
-- `<repo dir>/examples/asteroids/asteroids-zh-Hans.pseudo` + `gen-assets.mjs` (all-vector SVGs under
-  `examples/asteroids/assets/`) + `verify.mjs` — a complete, playable **Asteroids** (488 blocks · 6
-  targets · 10 monitors · 56 opcodes, no extensions): rotational + linear inertia with a capped speed,
-  screen wrap, bullets that inherit ship velocity, asteroid splitting with score bookkeeping, clone
-  particles, a monitor HUD, and stage-effect screen shake. This is the reference implementation for
-  everything in `references/game-feel.md`; `verify.mjs` is the model for a per-example real-VM harness
-  (54 assertion call sites, fails on any compiler warning or `PROJECT_RUN_ERROR`), and
-  `browser-verify.mjs` is its real-TurboWarp twin (29 asserts: monitors out of the web VM **and** off the
-  HUD DOM, real-key turning/thrust/fire, pixel collision, shake, pause, wrap, game over, 3 screenshots).
+- `<repo dir>/examples/asteroids/asteroids-zh-Hans.pseudo` + `gen-assets.mjs` (all-vector SVGs **and
+  synthesized 16-bit PCM mono WAV** under `examples/asteroids/assets/`) + `verify.mjs` — a complete,
+  playable **Asteroids** (545 blocks · 7 targets · 11 monitors · 59 opcodes · 5 sounds, no extensions):
+  rotational + linear inertia with a capped speed, screen wrap, bullets that inherit ship velocity,
+  asteroid splitting with score bookkeeping, clone particles, a monitor HUD, stage-effect screen shake,
+  a full-stage **white-flash sprite** on death, an **eased score counter** the HUD reads, and synthesized
+  SFX with per-shot **音调** jitter. This is the reference implementation for everything in
+  `references/game-feel.md`; `verify.mjs` is the model for a per-example real-VM harness (67 assertion
+  call sites, fails on any compiler warning or `PROJECT_RUN_ERROR`), and
+  `browser-verify.mjs` is its real-TurboWarp twin (41 asserts: monitors out of the web VM **and** off the
+  HUD DOM, real-key turning/thrust/fire, pixel collision, shake, **flash visible on the canvas**, sound
+  actually reaching the audio engine, pause, wrap, game over, 4 screenshots). Techniques 8-10 (flash /
+  eased counter / SFX) were ported from griffpatch's 《Scratch 3 教程：太空射击游戏》 season —
+  `https://space.bilibili.com/3546570486188620/lists/4564698?type=season` — see
+  `references/game-feel.md` for how to mine such a series into this DSL.
   The example loads from the app's 载入示例 menu as `asteroids/asteroids-zh-Hans.pseudo` (see
   `references/workflow.md`, "Per-example asset + verification harness").
 - `<你的项目目录>\Scratch\Making\扫雷` — **user project (personal path, not in repo)**, a complete and verified Minesweeper: full clone-pool grid with flood-fill reveal, first-click-safe mining, win/lose detection, custom board sizes/densities, and the F-key / flag-mode flag workaround above. Read `扫雷.pseudo` to see the four playbook traps in action; `playtest.mjs` is the real-scratch-vm assertion harness (64/64, incl. a simulated-right-click section that drives the `右键窗口` flag path) and `make-assets.mjs` generates all 39 SVG costumes. For the real right-click path: `rightclick.js` is the self-written TurboWarp extension (id `rightclick`, name **Turbowarp积木**, must be `unsandboxed: true`), and `inject-extension.cjs` bundles it into the shipped `.sb3` as a `data:` URI under `out/扫雷.inject.sb3` (the clean, extension-free build is `out/扫雷.sb3`).

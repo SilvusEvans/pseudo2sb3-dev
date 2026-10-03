@@ -1,10 +1,21 @@
 # Game-feel playbook (non-linear movement and other "arcade juice")
 
 Everything here is measured, not inferred: the idioms compile from
-`<repo dir>/examples/asteroids/asteroids-zh-Hans.pseudo` (小行星, 488 blocks · 6 targets) and every
-number quoted below is an assertion that passes in `<repo dir>/examples/asteroids/verify.mjs`
-(real scratch-vm, frame-stepped). Read `references/dsl.md` for syntax and
+`<repo dir>/examples/asteroids/asteroids-zh-Hans.pseudo` (小行星, 545 blocks · 7 targets · 11 monitors)
+and every number quoted below is an assertion that passes in
+`<repo dir>/examples/asteroids/verify.mjs` (real scratch-vm, frame-stepped) and in
+`browser-verify.mjs` (real TurboWarp web build, 41 asserts). Read `references/dsl.md` for syntax and
 `references/workflow.md` §"Per-example asset + verification harness" for how to write the harness.
+
+The last three sections (white flash, eased counter, sound) come from griffpatch's *space shooter*
+tutorial series — `https://space.bilibili.com/3546570486188620/lists/4564698?type=season`
+(《Scratch 3 教程：太空射击游戏》, 6 parts, uploaded by KidsLearning). Porting ideas from that kind of
+series is a productive loop: watch which *feedback* the tutorial adds (flash / counter / SFX), then
+re-implement it with what this DSL can actually emit — the mapping is rarely 1:1, and the mismatch is
+the interesting part. When you need the episode list, note that Bilibili's
+`x/polymer/web-space/seasons_archives_list` API paginates with **`page_num`** (not `page_no`; the wrong
+name returns `-400 请求错误`), and needs no WBI signature when fetched from a bilibili page context
+with `credentials:'include'`.
 
 ## The frame pump
 
@@ -129,10 +140,184 @@ magnitudes so it reads as a jolt rather than a slow blur:
         震屏 ← 0
 ```
 
-`verify.mjs` samples the trace inside one polling window and asserts ratio = 0.72 exactly
-(4.320 → 3.110), monotone decay, and that both effects are back at 0 afterwards (no residue).
-Note the threshold branch: without it the tiny residual never reaches 0 and 像素化 stays slightly
-on forever.
+`verify.mjs` samples the trace inside one polling window and asserts the ratio between two
+*consecutive distinct frame values* is 0.72 exactly, monotone decay, and that both effects are back at
+0 afterwards (no residue). Note the threshold branch: without it the tiny residual never reaches 0 and
+像素化 stays slightly on forever.
+
+**Compare adjacent *distinct* values, not adjacent *sample points*.** One `每帧` broadcast can be
+observed several times from a poll loop that runs faster than the VM's step budget, so a dense trace
+contains same-frame duplicates and `trace[1]/trace[0]` returns 1.0000 instead of 0.72. Dedupe first:
+`const steps = trace.filter((v, i) => i === 0 || v !== trace[i - 1])`.
+
+## White flash: a full-stage sprite, not an effect
+
+A hit that kills the ship should *sting*. Screen shake (stage 像素化/马赛克) reads as blur; what arcade
+games add on top is a full-screen white frame that decays. There is no stage-level "brightness/flash"
+effect in the DSL, so the idiom is **a dedicated sprite holding one 480×360 white SVG**, drawn last:
+
+```
+角色 白闪:                      # 声明在最后 → 画在最上层（绘制顺序=声明顺序）
+  初始隐藏
+  造型 "assets/asteroids/白闪.svg"
+  私有 闪光强度 = 0             # 自己的名字取特别一点，见下面第三条
+  定义 闪光衰减 不刷新:
+    如果 (闪光强度 > 6):
+      闪光强度 ← 闪光强度 * 0.75
+      特效设为("虚像", 100 - 闪光强度)
+    否则:
+      如果 (闪光强度 > 0):
+        闪光强度 ← 0
+        特效设为("虚像", 0)
+        隐藏
+  当收到("白闪"):
+    闪光强度 ← 100
+    特效设为("虚像", 0)
+    显示
+  当收到("每帧"):
+    闪光衰减()
+```
+
+and the dying ship just fires the level trigger — `广播("白闪")` right next to `广播("爆炸")`. Three
+numbers and two name choices are load-bearing:
+
+- **decay 0.75, start at 100, hide below 6** ⇒ 100 → 75 → 56 → 42 → 32 → 24 → 18 → 13 → 10 → 7.5 →
+  5.6 → hide, i.e. ~11 frames ≈ 0.4 s at the ~30 fps frame pump. Start at a *round 100*: the ghost
+  effect is `100 - 强度`, so the first draft's 92 meant the "full white" frame was actually 8%
+  transparent. The other number that was tried, decay 0.55 (≈ 200 ms total), made
+  `browser-verify.mjs` poll at 150 ms sample *nothing* and report "flash never appeared" while the
+  screenshot clearly showed one. Either poll faster (40 ms) or make the effect longer; do not start by
+  blaming the project.
+- **The overlay reads its own private strength variable, and that variable wants a distinctive name.**
+  `闪光强度` rather than `亮度`: `亮度` is the menu word for the BRIGHTNESS effect (`特效设为("亮度", …)`)
+  and `画笔亮度设为` is a real alias, so a variable with that name is confusing right where the effect
+  API is being used. It compiles (measured with a throwaway probe: `私有 亮度` / `全局 亮度` both emit
+  `data_setvariableto` with the variable id) — this is a readability choice, **not** a workaround. The
+  actual alias traps are in the clone-pool playbook: `方向` is the *silent* kind (substituted inside
+  expressions, no warning), `音量` is the loud kind (throws at the `显示变量` VARIABLE field). Check any
+  candidate name with `node <skill dir>/scripts/vocab.mjs --grep 名字`, run it from the repo directory
+  or it can't find `src/core/catalog.js`.
+- **`初始隐藏` + declared last** — the pool rule applies, and draw order is declaration order, so an
+  overlay sprite has to come after everything it covers.
+
+`verify.mjs` samples 震屏 and 闪光强度 in the *same* `peak(8, …)` loop: a second sampling pass would
+consume the shake's decay window (6 → ~0.24 in 8 frames) and make the 0.72 ratio unreadable. Browser
+side, `browser-verify.mjs` records `闪光强度` + `白闪.visible` per poll, screenshots
+`out/asteroids-turbowarp-白闪帧.png` on the first "visible && > 30" sample, then waits for the
+self-hide. Set the record threshold below the second frame's value (56) or you assert "covered the
+screen" on a flash you literally captured proof of.
+
+## Eased counters: let the HUD chase the real number
+
+griffpatch's Part 4 makes the score display tick up instead of jumping. In Scratch the usual way is a
+seven-segment clone rig — but this tool has monitors, so keep the clone rig out and put the easing on a
+**bookkeeping variable the monitor reads**:
+
+```
+全局 显示分数 = 0
+  定义 分数追赶 不刷新:
+    如果 (显示分数 < 分数):
+      显示分数 ← 显示分数 + 数学("向上取整", (分数 - 显示分数) * 0.25)
+    否则:
+      如果 (显示分数 > 分数):
+        显示分数 ← 分数          # 分数 被往下改（重开/扣分）时立刻吸附，不回滚动画
+```
+
+with `显示变量(显示分数, "大", 12, 12)` in the HUD and `隐藏变量(分数)` — the real score becomes pure
+bookkeeping. Three details:
+
+- **`向上取整` is what makes the last point land.** Truncated multiplication asymptotically stalls one
+  short; `ceil(diff * 0.25)` is ≥ 1 whenever `显示分数 < 分数`, so convergence is finite (verify.mjs
+  loops ≤ 40 frames from 0 to 500 and asserts monotone + exact arrival).
+- **Call it outside the `进行中 = 1` gate** (right after `开关与清场()`), like the pause toggle. Inside
+  the gate, pause or game-over would freeze the counter mid-chase and the player would see a score that
+  never matches what they earned. `browser-verify.mjs` asserts `显示分数 === 分数` on the GAME OVER
+  screen for exactly that reason.
+- **Snap on the lower direction only.** Chasing in both directions turns a life-penalty into an
+  animation; you want the readout to fall instantly and climb lazily.
+
+## Sound: synthesized WAV, pitch jitter, and what headless does with it
+
+`.sb3` sound assets are **16-bit PCM mono RIFF WAV** — `src/core/project.js`'s `wavInfo()` reads the
+header itself and the sound entry stores `rate` + `sampleCount`, so mp3/AIFF or stereo will not pass.
+There is no need to hunt for a sound pack: `examples/asteroids/gen-assets.mjs` writes them from code,
+next to the SVGs, with a ~30-line synth (one LCG for repeatable noise):
+
+```
+const RATE = 22050;
+const pcmWav = samples => { /* RIFF/fmt/data header, Int16 LE frames, mono, rate = RATE */ };
+const synth = (secs, f) => Array.from({length: Math.round(secs * RATE)}, (_, i) => f(i / RATE, i, n));
+const lowpass = (s, win) => /* moving average: cheap stand-in for a resonant filter */;
+const rnd = () => /* one seeded LCG, so the noise is byte-identical between runs */;
+// 激光 = 方波，频率 180 + 900·e^(-28t)（1080 → 180 Hz 的下扫"pew"），0.14 s
+// 爆炸 = lowpass-10 噪声叠 70 Hz 指数下滑正弦，0.38 s
+// 沉船 = lowpass-26 噪声叠 150 → 40 Hz 轰鸣，0.75 s
+// 升级 = [660,880,1320] 三音上行琶音 ×0.09 s；游戏结束 = [392,311,262] 下行小调 ×0.18 s
+```
+
+DSL side: `声音 "assets/asteroids/激光.wav"` in the sprite header, then in the *action* block:
+
+```
+      音效设为("音调", 随机(0, 24))     # 子弹：每次偏高一点点
+      播放声音("激光")
+```
+
+- **Vary pitch per shot** so a repeated one-shot sample doesn't machine-gun. 音调 100 = one octave, so
+  飞船 uses `随机(0, 4) * 10 - 20` (±2 semitones) and 子弹 `随机(0, 24)`. 小行星 instead maps pitch to
+  *state*: `100 + (2 - 尺寸) * 60` ⇒ 大 40 / 中 100（素材原调）/ 小 160 — one asset, big rocks thud,
+  fragments ping. Get the sign right: the first draft `(尺寸 - 3) * 90` put the biggest rock at 0
+  (two octaves down, mud) and made the direction run backwards, which no assert caught because
+  nothing in the harness listens.
+- **Only ever `播放声音` (non-blocking) in a frame-pump game.** `播放声音并等待` needs the sound to
+  finish; in a headless scratch-vm there is no `soundBank`, so `_playSound` returns early and
+  `waitingSounds` is never cleared — the thread stalls forever and, since the pump uses
+  `广播并等待`, so does the whole game. `verify.mjs` passing at all is the proof the example avoided it.
+- **`播放声音` in headless is a silent no-op, and that's fine**: `scratch3_sound.js` checks
+  `if (sprite.soundBank)` before playing, so the block just falls through. Never assert "sound played"
+  in Node; assert it statically (per-sprite `sounds[]` names, `rate`, `sampleCount`) and let the
+  browser run prove playback.
+- **The TurboWarp web build has no `soundBank.bufferStore`** (its engine exposes
+  `audioEngine/soundPlayers/playerTargets/soundEffects/effectChainPrime`), so the buffer-store route you
+  might reach for is a dead end. Probe behaviorally instead: wrap the bank and record calls.
+
+```js
+  const bank = sprite.sprite.soundBank;
+  const byId = Object.fromEntries(sprite.sprite.sounds.map(s => [s.soundId, s.name]));
+  window.__snd = [];
+  const orig = bank.playSound.bind(bank);
+  bank.playSound = (target, soundId) => { window.__snd.push(`${target.getName()}:${byId[soundId]}`); return orig(target, soundId); };
+```
+
+Then `ok(played.includes('子弹:激光'))` after firing, `'飞船:沉船'` after a collision, and
+`'时钟:游戏结束'` on the GAME OVER screen — real evidence the extension-free sound path works, without
+needing to hear anything.
+
+## Costume geometry: the pivot, the swap, and the size↔costume index
+
+Three bugs a user reports as "转起来怪怪的 / 越打越大", all fixed in `examples/asteroids` and all now
+pinned by asserts in `verify.mjs`'s asset-geometry block (which reads the SVGs from disk, so the
+*artwork* is under test, not just the blocks):
+
+- **The rotation pivot is the viewBox center, so the silhouette must be symmetric about it.** Scratch's
+  rotation center for a vector costume is `viewBox` center (= `costume.rotationCenterX/Y` in the built
+  `.sb3`, = half the canvas size). The 飞船 wedge was drawn `21,0 -17,-15 -9,0 -17,15` — nose 21, stern
+  17 — so its bounding-box center sat 2 units *ahead* of the pivot and the hull swung around a point
+  behind its own middle. Fix: recentre the polygon (`19,0 -19,-15 -11,0 -19,15`), don't just enlarge
+  the canvas. Assert on the artwork: `min(x) === -max(x)`.
+- **A costume swap replaces the *whole* drawing.** 飞船 has two costumes and switches with
+  `换成造型(推进中 + 1)`, so a flame-only 火焰 costume made the ship *vanish* whenever the thruster was
+  held. Every "ship + accessory" costume has to repeat the base artwork (flame first, then the hull
+  polygon on top), and both canvases must share the same physical origin — 火焰 is 88×32 with
+  `viewBox "-44 -16 88 32"` while 飞船 is 44×32, both centered on (0,0), so switching never moves the
+  pivot. Assert: the flame costume's rightmost point equals the hull's.
+- **A numeric size and a costume index run in opposite directions — assert the visual, not the number.**
+  `尺寸` counts *up* as rocks get smaller (scoring `(4-尺寸)*5`, pitch, spawn `随机(2,3)`), while the
+  costume list is declared 大、中、小 = 1、2、3. `换成造型(尺寸)` therefore drew the smallest rock for the
+  biggest value: every hit made the asteroid *grow* on screen, while all the score/bookkeeping asserts
+  stayed green. The fix is `换成造型(4 - 尺寸)`; the lesson is that a numeric invariant can't see an
+  inverted index, so the harness also asserts `clone.currentCostume === 3 - 尺寸` (0-based) for every
+  live clone and for the two fragments after a split. Keep the collision-radius table honest by reading
+  it off the artwork (max |coordinate|: 小 8.2 / 中 18.9 / 大 34.4), not from memory.
 
 ## Particles: clone pool with drag + shrink + fade
 
@@ -197,6 +382,9 @@ readout is on the header the moment the project opens. Compare the tetris exampl
 10-clone seven-segment display precisely to *avoid* watchers — use monitors unless you need the look.
 Bookkeeping variables get `隐藏变量(在场子弹)` so the HUD stays clean. See
 `references/sb3-format.md` §"monitors[]" for the shape and the first-script visibility rule.
+
+And a monitor can display an *animated* number: point it at a bookkeeping variable that chases the real
+one each frame ("Eased counters" above), and the readout ticks up without a single clone.
 
 ## Pause, cooldown and cleanup — the three gates that broke first
 

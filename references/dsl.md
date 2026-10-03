@@ -2,6 +2,8 @@
 
 Skeleton, indentation, declaration syntax. **Don't hand-copy block aliases or params** — fetch them live from the project's own catalog with `node scripts/vocab.mjs --grep keyword`; it reads the same table the compiler does.
 
+Everything here is also the **output contract of 反解** (`.sb3` → `.pseudo`): the decompiler only emits forms this file documents, and anything a real project contains that the DSL *cannot* express becomes a `# …` comment plus a reported `problem` instead of disappearing. That asymmetry table lives in `references/decompile.md`.
+
 ## Skeleton
 
 ```
@@ -25,6 +27,10 @@ sprite ball:
   list trail
   # comma-separated files; paths are relative to the directory of this .pseudo
   costume "assets/star.svg", "assets/ball.png"
+  # sounds must be 16-bit PCM mono RIFF WAV — src/core/project.js parses the header itself and the
+  # sound entry stores rate + sampleCount. Generate them in gen-assets.mjs instead of downloading a
+  # pack; see references/game-feel.md §"Sound" for the synth and for what a headless VM does with
+  # 播放声音 / 播放声音并等待.
   sound "assets/tone.wav"
 
   # custom block (def / 定义): param types num / str / bool (数 / 文本 / 布尔)
@@ -78,7 +84,11 @@ The same skeleton in Simplified Chinese, for reference:
     隐藏变量(分数)
 ```
 
-**There are no trailing comments.** `#` / `//` only start a comment when the comment occupies a whole line. `#` also begins a colour literal (`set pen color to("#ff8800")`), so a `#` sitting after code on the same line is a colour, not a comment.
+**Trailing comments are supported** (since 2026-10-03): a `#` or `//` **outside a string literal** cuts the line,
+so `分数 ← 分数 + 1   # 每帧一次` and even `初始隐藏   # 池本体` are fine. Before that date only whole-line comments parsed and
+a trailing `#` died with `Unrecognized character "#"`. The one thing that still is *not* a comment is a `#` inside a string:
+`#` also begins a colour literal (`set pen color to("#ff8800")`), and `说("a#b")` keeps its text — the lexer never cuts inside quotes.
+See "Comments" under "Indentation and block boundaries" for the tokenizer-level reasoning.
 
 **Always prefer SVG for assets.** Scratch/TurboWarp re-encodes bitmap costumes (even PNGs get compressed); only vectors stay crisp. If you can draw it with `<rect>/<circle>/<line>`, don't ship a PNG.
 

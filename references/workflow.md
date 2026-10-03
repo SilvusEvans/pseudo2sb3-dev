@@ -10,8 +10,9 @@ Repo at `<repo dir>`. If your copy lives on an exFAT portable drive, note that e
 |:--|:--|
 | `npm run start` | Start the Electron desktop app |
 | `npm run compile -- input.pseudo -o output.sb3` | CLI compile (`--parse-check` has scratch-parser double-check; `--json` also saves project.json) |
+| `npm run compile -- project.sb3 -o out.pseudo` | CLI **反解 / decompile** — a `.sb3` input flips the direction (`--no-media` skips writing costumes/backdrops/sounds) |
 | `npm run check-catalog` | Trace generated data back to source files and compare catalog/aliases/menus (**metadata self-check**) |
-| `npm test` | `node --test test/*.test.mjs`: compile shapes + scratch-parser + real scratch-vm execution |
+| `npm test` | `node --test test/*.test.mjs`: compile shapes + scratch-parser + real scratch-vm execution + 反解 round trip and foreign-project tests |
 | `npm run smoke` | Electron end-to-end smoke (renderer errors, line skipping, Ctrl+Enter compile, no console errors) |
 | `npm run extract-catalog` / `extract-extensions` | Regenerate the catalog from vendor source |
 | `npm run regen` | Chains the two above + check-catalog + test |
@@ -58,8 +59,16 @@ npm test
 node src/cli.js examples/your-example.pseudo -o out/your-example.sb3 --parse-check
 node <skill dir>/scripts/inspect-sb3.mjs out/your-example.sb3      # structural self-check + opcode histogram
 node <skill dir>/scripts/inspect-sb3.mjs out/your-example.sb3 --opcode the-opcode-you-want --limit 3   # slot decoding, one block at a time
+node src/cli.js out/your-example.sb3 -o out/round.pseudo            # 反解 the artifact you just compiled
+node src/cli.js out/round.pseudo -o out/round.sb3 --parse-check     # …and compile it again
 npm run smoke                                              # only mandatory if you touched the Electron side
 ```
+
+**Whenever you change block emission shape** — slots, shadow vs. plugged block, field encoding — **run the
+反解 pair above.** The compiler's failure mode is silently dropping content, and the decompiler mirrors it —
+a slot convention that changes on the emit side must change on the read side too, otherwise a round trip
+loses blocks without any error. See `references/decompile.md` for the tag-1/2/3 table and the real-TurboWarp
+import cross-check.
 
 `inspect-sb3.mjs` is zero-dependency (it unzips the file itself) and runs on **any** .sb3, including projects downloaded from TurboWarp/Scratch — use it as a baseline to calibrate your encoding assumptions (e.g. numeric slots are often written as strings in real files, so the script doesn't type-assert them).
 
@@ -79,12 +88,18 @@ env -u ELECTRON_RUN_AS_NODE ./node_modules/.bin/electron \
 ```
 
 The final link is **importing into the real TurboWarp web app and clicking the green flag** (below).
+For 反解 specifically, `node <skill dir>/scripts/turbowarp-import-check.mjs <A.sb3> <B.sb3> [prefix]`
+loads two projects side by side in turbowarp.org/editor and compares the per-target block/variable/list/procedure
+counts (real blocks vs shadow blocks separately, rename-tolerant), then green-flags each and fails on console errors —
+that is the check that catches a decompiler misreading a slot, which node-side fingerprint tests structurally cannot.
 
 ## Per-example asset + verification harness
 
 A full game example is a **directory**, not a loose `.pseudo`: `examples/<name>/` holds
 `<name>-zh-Hans.pseudo`, `gen-assets.mjs` (writes every costume/background as an SVG under
-`examples/<name>/assets/`), and `verify.mjs` (a real scratch-vm harness). Run them with
+`examples/<name>/assets/` — and, since the asteroids build, any sound effect too: the same script
+synthesizes 16-bit PCM mono WAV with a small in-file synth, so an example never depends on a
+downloaded asset pack), and `verify.mjs` (a real scratch-vm harness). Run them with
 `node examples/asteroids/gen-assets.mjs` then `node examples/asteroids/verify.mjs` — the last line is
 the pass marker, and every section prints `✓`/`✗` with the measured numbers in the message, so a
 failure tells you what the VM actually did. This is the harness that caught the sin/cos swap, the
@@ -99,7 +114,7 @@ the directory away and every game example was CLI-only. Pinned by `test/electron
 ("load a subdirectory example" / "the nested example's asset base dir resolves its own costume" / two
 traversal rejects).
 
-Harness skeleton (copy `examples/asteroids/verify.mjs` — 54 assertion call sites, all green):
+Harness skeleton (copy `examples/asteroids/verify.mjs` — 75 assertion call sites, all green):
 
 ```js
 const r = await buildFromSource(src, {baseDir: dir});   // dir = the example's own folder
@@ -123,7 +138,12 @@ Things that cost a debugging round each, all measured:
   globals — a coasting ship escapes the sample window), then every iteration move *all* visible clones
   of the hazard type onto it (`ship.x + 3, ship.y + 3`), not just the first one you find: that one can
   be consumed by a split between pokes. 60 ms dwells per poke were measured to miss the hit; 150 ms
-  catches it on the first iteration.
+  catches it on the first iteration. **But 150 ms is too coarse for a short-lived *effect***: the
+  white-flash sprite only lives ~330 ms and the poll then caught a single sample (and a record
+  threshold of `> 40` missed the 38.8 second one), so the browser loop now dwells 40 ms and records at
+  `> 30`. Size the poll and the assert threshold off the effect's decay rate, not off "what looks
+  reasonable" — and when a browser assert claims an effect never appeared while your own screenshot
+  shows it, the sampling is the bug.
 - **`target.visible`, not `target.isVisible`.** The latter is undefined in the headless build, so
   "count the live clones" silently returns 0 (or everything) and every clone assertion lies.
 - **Step by wall clock, never by a game variable.** `const step = async n => { for (let i = 0; i < n;
@@ -133,9 +153,31 @@ Things that cost a debugging round each, all measured:
   while `进行中 = 1` (frozen for the whole pause test) *and* it is the same subsystem you're measuring
   (it had already decayed `震屏` to 0 before the read).
 - **Sample inside the window, not after it.** For any decaying value, push readings from `peak`'s
-  getter (`shakeTrace.push(gvar('震屏').value)`) and assert on the trace: `decaying[1] / decaying[0]`
-  pins the coefficient (0.72 exactly) and monotonicity. Reading the global after the fact only ever
-  sees the reset 0.
+  getter (`shakeTrace.push(gvar('震屏').value)`) and assert on the trace, and monotonicity plus the
+  return-to-0 afterwards. Reading the global after the fact only ever sees the reset 0. Two refinements
+  the flash/shake pair forced:
+  - *Ratio = adjacent **distinct** frame values.* One `_step()` burst can be observed twice before the
+    VM advances, so `decaying[1] / decaying[0]` sometimes returns 1.0000. Dedupe with
+    `trace.filter((v, i) => i === 0 || v !== trace[i - 1])` and divide the first two survivors — that is
+    what pins 0.72 exactly.
+  - *One sampling loop per window, not one per quantity.* Two independent `peak(8, …)` passes over the
+    same decay window eat it: the second pass saw 震屏 already down at ~0.24 and the 0.72 assertion
+    became noise. Push both readings from a single getter.
+- **Deterministic hit tests beat relational ones when the random part is *timing*.** Section 8 used to
+  fire bullets and assert `gain % 5 === 0 && gain >= 5 * grew`; it flipped from pass to fail depending
+  on how many parked rocks the prep-shot chain-hit. Now the harness forces the scenario (one rock with
+  `尺寸` set to 3, parked away from the others, every live bullet pinned onto it with its velocity
+  zeroed each `_step`, break on the first score gain, then teleport the bullets away so the fragments
+  aren't hit by the same shot) and asserts the exact result: `gain === 5 && grew === 1`. Keep
+  relational assertions for genuinely random *values*; make the *event* deterministic instead.
+- **Sound has no headless proof — assert it statically, then probe it in the browser.** `播放声音` is a
+  no-op in Node (`scratch3_sound.js` bails when `sprite.soundBank` is absent) and `播放声音并等待`
+  *stalls the thread forever* for the same reason, so a frame-pump harness that passes is itself the
+  evidence that the example only uses the non-blocking form. In the browser the TurboWarp web engine has
+  no `soundBank.bufferStore`, so you can't inspect buffers; wrap `bank.playSound(target, soundId)` with
+  a recorder and assert the collected `sprite:.sound` strings after the real action (see
+  `references/game-feel.md` §"Sound"). Static side: per-sprite `sounds[]` names plus `rate` /
+  `sampleCount` from the built project.
 - **Snapshot after the effect lands.** The pause test must take positions *after* `frames(4)` past the
   keypress, else it measures the frames still in flight; and resuming has to clear a 24-frame
   cooldown, so allow `until(..., 80)`, not 10.
@@ -194,12 +236,18 @@ env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY \
 - **Saved visibility is checkable before the green flag is ever pressed**: `vm.runtime.targets.filter(t => t.isOriginal && !t.isStage).map(t => [t.getName(), t.visible])` right after `loadProject`. This is how the `初始隐藏` directive is verified — without it, only 玩家 should be visible.
 - To see the visuals in a screenshot: `page.locator('canvas').first().screenshot({path})` captures only the stage and is far clearer than a full-page shot — `图章` (stamp) draws on the pen layer, which is invisible in a full-page thumbnail.
 
-### What the TurboWarp **web build** exposes differently (all measured 2026-10-02 with `examples/asteroids/browser-verify.mjs`, 29 asserts, green)
+### What the TurboWarp **web build** exposes differently (all measured 2026-10-02/03 with `examples/asteroids/browser-verify.mjs`, 41 asserts, green)
 
 A per-example browser harness is the sibling of `verify.mjs` (same section numbering, same message style, screenshots into `out/`). Four API mismatches cost a run each — the page object is *not* the npm `scratch-vm` you code against in Node:
 
 - **`vm.toJSON()` returns a string.** `(vm.toJSON().monitors || []).length` is always 0 and reads as
   "TurboWarp dropped my monitors", which is a compiler-bug accusation against yourself. `JSON.parse` it first.
+- **`sprite.soundBank` has no `bufferStore`.** The web build's audio engine exposes
+  `audioEngine / soundPlayers / playerTargets / soundEffects / effectChainPrime` only, so you cannot
+  inspect loaded buffers. Prove playback *behaviorally*: wrap `bank.playSound(target, soundId)` with a
+  recorder keyed by `sounds[].name`, then assert the collected `角色:音效` strings after the action that
+  should have made the noise (fire → `子弹:激光`, death → `飞船:沉船`, game over → `时钟:游戏结束`).
+  `references/game-feel.md` §"Sound" has the snippet and the headless half of the story.
 - **`runtime.getMonitorState()` is a trimmed-down immutable map**, with only
   `map dirty get has set delete filter empty size values valueSeq shallowClone` on its prototype chain —
   no `forEach` / `toArray` / `toJS` / `entrySeq` / `valueSeq().toArray()`, and it is not `Symbol.iterator`-able.
