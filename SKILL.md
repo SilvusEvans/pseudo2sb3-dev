@@ -96,8 +96,8 @@ Three easy traps:
 **Examples are language-aware too**: the default example loaded by the "Example" button in the UI (and by an `example` action with no name) is decided by the **UI language**, via `defaultExampleFile()` in `electron/main.cjs`; if that language's variant is missing it falls back to the English one. Every file is named `<english-name>-<lang>.pseudo` — no language gets a bare name — so the set is `hello-en.pseudo` / `hello-zh-Hans.pseudo` /
 `hello-zh-Hant.pseudo` / `hello-ja.pseudo`. The examples **listed individually** in the "Load example" menu are still loaded by name (the user clicked a specific file) and are not language-filtered. To add a language variant: add the file → no menu changes needed (the menu scans `examples/` and takes each label from the file's first-line comment) → the default-example logic picks it up automatically. `electron-smoke.cjs` switches to English, clicks "Example" once, and asserts it gets `hello-en.pseudo`.
 
-After any change, always run: `npm run check-catalog` → `npm test` (96 items, including the four-language hello, the Chinese/English snake examples
-run for real under green flag in a real scratch-vm, and the 反解 round-trip + foreign-project tests)
+After any change, always run: `npm run check-catalog` → `npm test` (103 items, including the four-language hello, the Chinese/English snake examples
+run for real under green flag in a real scratch-vm, the 反解 round-trip + foreign-project tests, and the 本体属性声明 tests)
 → `npm run smoke` (67 end-to-end items, last line `SMOKE PASS`; the decompile steps ride along, so touching the renderer means re-running it). **Smoke requires a real GUI desktop session**: with no display,
 Electron never starts, the process hangs and prints nothing — don't retry it, first confirm you're in a desktop session.
 
@@ -131,7 +131,7 @@ Other notes for such a copy:
 
 - `node_modules` (complete, including Electron) and `.ref` may already be present — check
   before reinstalling. `.ref` is just vendored sources and is safe to copy or skip.
-- `npm test` and `npm run check-catalog` run fine there (96 tests).
+- `npm test` and `npm run check-catalog` run fine there (103 tests).
 - A `dist/` directory in such a copy is probably a stale build; re-run `npm run dist` if you
   need an exe that matches the current source.
 - Some agent harnesses inject a Node shim through `NODE_OPTIONS=--require=…`;
@@ -174,19 +174,21 @@ Deliberately not done: return values from custom blocks, `sensing_of` (the optio
 Reverse import `.sb3 → pseudocode` (反解) **is** implemented (2026-10-03): `src/core/decompile.js`,
 the CLI (a `.sb3` input flips the direction), and the desktop app (文件 → 反解 Scratch 工程,
 `Ctrl+Shift+O`). Its own boundaries: a `procedures_callreturn` loses its return value (same limit as
-the compiler above), sprite x/y/size/direction/rotationStyle have no declaration form in the DSL, and
-an empty C-block body / a hat-less stack / a list's initial contents can only survive as comments —
-all of those are reported as `problems` rather than dropped quietly. See `references/decompile.md`.
+the compiler above), and an empty C-block body / a hat-less stack / a list's initial contents can only
+survive as comments — all of those are reported as `problems` rather than dropped quietly. Sprite
+x/y/size/direction/rotationStyle/draggable/volume/currentCostume **do** round-trip now: the DSL gained
+target-level 本体属性 declarations (`初始坐标/初始大小/初始朝向/初始旋转/可拖拽/初始音量/起始造型`) on 2026-10-03,
+and 角色 names keep their spaces (`角色 Sprite 1:`) instead of being renamed. See `references/decompile.md`.
 
 Known i18n gaps: dropdown options for hardware extensions (microbit/wedo2/…) have no zh-Hant/ja labels, so they can only be written in Chinese or in the English original;
 the multilingual labels for the `drum` / `instrument` menus are hand-maintained (`MENU_I18N`) and must be re-checked after an extension version bump.
 
 ## Resources
 
-- `references/dsl.md` — pseudocode syntax: skeleton, indentation, assignment/mutation, menu params must be quoted, operators, custom blocks and `不刷新` (warp), prefer SVG assets, **HUD monitor syntax (`显示变量(名, "模式", x, y)`)**, known unsupported forms (incl. why the Scratch 2 镜头 blocks are no-ops)
+- `references/dsl.md` — pseudocode syntax: skeleton, indentation, assignment/mutation, menu params must be quoted, operators, custom blocks and `不刷新` (warp), prefer SVG assets, **target-level 本体属性 declarations (`初始坐标/初始大小/初始朝向/初始旋转/可拖拽/初始音量/起始造型`, incl. the four-language spellings and the sprite-only rule)**, **sprite names may keep their spaces (bare vs quoted form)**, HUD monitor syntax (`显示变量(名, "模式", x, y)`), known unsupported forms (incl. why the Scratch 2 镜头 blocks are no-ops)
 - `references/game-feel.md` — game-feel playbook from `examples/asteroids`: frame pump (`广播并等待` + warp), thrust decomposition (**x ← sin, y ← cos**, why the textbook pair is 90° off), angular inertia, damping, Pythagorean speed cap **and the sequential-assignment snapshot trap**, one-line 取余 screen wrap, timer-derived blink, clone particles with drag+shrink+fade, screen shake via **stage effects** because camera blocks do nothing, **full-stage white-flash overlay**, an **eased counter behind a monitor**, synthesized WAV + 音调 jitter (incl. why `播放声音并等待` deadlocks a headless harness), and the pause/cooldown/cleanup gate rules
 - `references/sb3-format.md` — `.sb3` block-graph shape: slot encoding `[1/2/3]`, primitive type numbers, variables and lists registered by **key**, static dropdowns as fields vs dynamic menus as shadow blocks, list-index `all/last/random` semantics, TurboWarp `toJSON()` under-reporting, **`monitors[]` (MonitorRecord) shape and the first-script visibility rule**, and why the web build's `toJSON()` is a *string* (property reads off it silently `undefined`)
-- `references/decompile.md` — the 反解 path: CLI/desktop entry points and their output contract, the slot-tag table with the **obscured-shadow (tag 3) trap**, the ambiguous tag-2 rule (`inputs[].stmt` first, then `procedures_call` vs `procedures_callreturn`), the full "what the DSL cannot express → which comment + which problem" table, and the three verification layers (fingerprint round trip, `npm run smoke`, `turbowarp-import-check.mjs`)
+- `references/decompile.md` — the 反解 path: CLI/desktop entry points and their output contract, the slot-tag table with the **obscured-shadow (tag 3) trap**, the ambiguous tag-2 rule (`inputs[].stmt` first, then `procedures_call` vs `procedures_callreturn`), the full "what the DSL cannot express → which comment + which problem" table (incl. which saved body attributes now round-trip as `本体属性` declarations and which still cannot), and the three verification layers (fingerprint round trip, `npm run smoke`, `turbowarp-import-check.mjs`)
 - `references/workflow.md` — project workflow: the 6 steps for adding a block, five historical lessons, the verification-chain commands, **the per-example `gen-assets.mjs` / `verify.mjs` harness conventions (headless `碰到` limitation, wall-clock frame stepping, sampling decaying values)**, the operational order and traps for verifying TurboWarp in the built-in browser, packaging verification
 - `scripts/vocab.mjs` — exports the available block list from the project catalog (`--group`/`--grep`/`--lang`/`--json`)
 - `scripts/inspect-sb3.mjs` — zero-dependency `.sb3` unpacking and structural self-check; runs on any project. Its overview dumps **`monitors[]`** (mode, `VARIABLE`, x/y, range, hidden flag), per-target block/script/variable counts, and the opcode histogram.

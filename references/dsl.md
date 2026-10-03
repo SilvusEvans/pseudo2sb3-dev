@@ -19,6 +19,9 @@ sprite ball:
   # never draws in the editor, in the packaged player, or in the frame before the green flag.
   # Only meaningful on a sprite (a stage has no original); it adds no blocks.
   initially hidden
+  # body attributes: initial position (x, y) / size / direction / rotation style / draggable /
+  # volume / costume — sprite header only, no blocks. See "本体属性声明" below.
+  initial position (36, 28)
   # A var/list declared inside a sprite block is still registered as global (in the stage's table)
   var height = 180
   var speed = 0
@@ -279,6 +282,56 @@ builder. This is the *only* difference between "hidden once the flag runs" and "
 // project.json, targets[i]
 "visible": false   // ← 初始隐藏 writes this; without it the compiler writes true
 ```
+
+### 本体属性声明 (saved body attributes)
+
+A `.sb3` stores each target's position, size, direction, rotation style, draggable flag, volume and
+starting costume. Since 2026-10-03 all of them have a declaration form, so 反解 round-trips them
+instead of reporting `本体属性…没有声明方式`. They are **target-level directives** like 造型 / 初始隐藏:
+they sit in the sprite header block, emit **no blocks**, and each may be written only once.
+
+| Directive | Also spelled | Lands in `project.json` | Notes |
+|:--|:--|:--|:--|
+| `初始坐标 (x, y)` | `initial position`, `初始座標`, `初期位置` | `x`, `y` | two numbers in parentheses, **signs included** (`(36, -28)`) — the stage center is 0,0 |
+| `初始大小 120` | `initial size`, `初始大小`, `初期サイズ` | `size` | must be > 0 |
+| `初始朝向 45` | `initial direction`, `初始朝向`, `初期向き` | `direction` | degrees |
+| `初始旋转 "不可旋转"` | `initial rotation style`, `初始旋轉`, `初期回転スタイル` | `rotationStyle` | quoted 旋转方式 menu label: 左右翻转/不可旋转/任意旋转, or the raw `left-right` / `don\'t rotate` / `all around` |
+| `可拖拽` | `draggable`, `可拖曳`, `ドラッグ可` | `draggable: true` | no argument; omit it for the default (false) |
+| `初始音量 80` | `initial volume`, `初始音量`, `初期音量` | `volume` | 0–100; **allowed on 舞台 too** (the stage has a volume) |
+| `起始造型 "b"` | `initial costume`, `起始造型`, `初期コスチューム` | `currentCostume` | names a 造型/背景 **label** (the asset file's basename), not an index — insert a costume in front and it still points at the same one. On 舞台 it selects a 背景 |
+
+```
+角色 蛇身段:
+  初始隐藏
+  造型 "assets/身体.svg", "assets/头.svg"
+  初始坐标 (36, 28)
+  初始大小 120
+  初始朝向 45
+  初始旋转 "不可旋转"
+  可拖拽
+  初始音量 80
+  起始造型 "头"
+```
+
+Defaults are `x 0, y 0, size 100, direction 90, rotationStyle "all around", draggable false,
+volume 100, currentCostume 0`, and 反解 leaves an unwritten directive out, so a project that never
+moved a sprite still reads clean.
+
+Errors to expect (all `PsError`, no silent fallback):
+
+- `初始坐标 只能写在角色里，舞台没有本体` — 初始坐标/初始大小/初始朝向/初始旋转/可拖拽 are sprite-only;
+  初始音量 and 起始造型 work on the stage.
+- `初始大小 在一个角色里只能写一次` — duplicates are refused rather than last-wins.
+- `造型「x」不存在（… 里可选：a、b）` — 起始造型 that matches no 造型 label, reported at that line.
+
+### Sprite names may keep their spaces
+
+Scratch's own default is `Sprite 1`, and the 角色 head reads **everything up to the colon**, so a bare
+name may contain spaces and digits: `角色 Sprite 1:`, `角色 球 甲:`. Use the quoted form
+(`角色 "a:b":`) only for names that the lexer cannot hand back unchanged — a leading digit, or
+punctuation like `:` `,` `(`. The two characters that can never appear in a name are `"` and a
+newline (the string lexer has no escapes); 反解 replaces those with `_` and reports it as a note.
+Nothing else renames a sprite any more, so 反解 no longer turns `Sprite 1` into `Sprite_1`.
 
 ## Known not done
 

@@ -23,9 +23,9 @@ Drop the folder into your agent's skills directory — for WorkBuddy AI that is
 | Path | What's in it |
 |:--|:--|
 | `SKILL.md` | Routing by intent, the six hard rules, the clone-pool/grid playbook, the i18n layer, commands, boundaries |
-| `references/dsl.md` | The `.pseudo` syntax: skeleton, indentation, assignment, menu arguments, custom blocks, `不刷新` (warp), known-unsupported forms |
+| `references/dsl.md` | The `.pseudo` syntax: skeleton, indentation, assignment, menu arguments, custom blocks, `不刷新` (warp), target-level 本体属性 declarations (position / size / direction / rotation style / draggable / volume / starting costume), sprite naming, known-unsupported forms |
 | `references/game-feel.md` | The game-feel playbook, every idiom measured by a real harness: frame pump, thrust decomposition, damping + speed cap, screen wrap, stage-effect screen shake, full-stage white flash, eased HUD counters, synthesized WAV + pitch jitter, costume pivot/swap geometry, clone particles |
-| `references/decompile.md` | The reverse path `.sb3 → pseudocode`: CLI/desktop entry points, the slot-tag table (incl. the obscured-shadow trap), what the DSL cannot express, and the three verification layers |
+| `references/decompile.md` | The reverse path `.sb3 → pseudocode`: CLI/desktop entry points, the slot-tag table (incl. the obscured-shadow trap), which saved body attributes round-trip as declarations and what the DSL still cannot express, and the three verification layers |
 | `references/sb3-format.md` | How the emitted `.sb3` block graph is shaped: slot encoding, primitive type numbers, variables/lists registered by key, static dropdowns vs shadow menus |
 | `references/workflow.md` | Adding a block (the 6 steps), historical lessons, the verification chain, verifying TurboWarp in a real browser, packaging checks |
 | `scripts/vocab.mjs` | Dumps the block vocabulary from a repo's own catalog — `--grep`, `--group`, `--lang`, `--json` |

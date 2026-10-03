@@ -60,13 +60,17 @@ Two lessons, both pinned by `test/decompile.test.mjs`:
 | an opcode this build does not know | `# 反解不支持: <opcode> (SLOT=…, FIELD=…)`, and its substack bodies are preserved under a `并发执行:` container | `problem` |
 | a reporter/boolean left dangling in a statement chain | `# 悬空的报值积木 <opcode>` | `problem` |
 | `procedures_callreturn` (a custom block that returns a value) | the call as a statement | `problem`: 「带返回值的自定义块…返回值会丢失」 (matches the compiler's own boundary) |
-| sprite x/y/size/direction/rotationStyle | `# 本体属性未还原: …` | `problem` (there is no declaration form for them) |
-| a name that cannot be written as an identifier (spaces, brackets, quotes, `:` …) | renamed (`my variable` → `my_variable`) | listed in `renames`, shown as `decompile.renamed` |
+| sprite x/y/size/direction/rotationStyle/draggable/volume/currentCostume | `初始坐标 (x, y)`, `初始大小 n`, `初始朝向 n`, `初始旋转 "label"`, `可拖拽`, `初始音量 n`, `起始造型 "造型名"` — defaults are left unwritten | — (declarable since 2026-10-03; see `references/dsl.md` §"本体属性声明") |
+| an attribute value that is not a number, or a rotation style the menu has no option for | the directives around it are still written | `problem`: 「…不是数字，无法声明」/「不在 初始旋转 的选项里」 |
+| a **variable / list / broadcast / custom-block** name that cannot be written as an identifier (spaces, brackets, quotes, `:` …) | renamed (`my variable` → `my_variable`) | listed in `renames`, shown as `decompile.renamed` |
+| a **sprite name** with spaces or punctuation | written verbatim — bare if the lexer reads it back (`角色 Sprite 1:`), quoted if not (`角色 "a:b":`) | — |
+| a sprite name containing `"` or a newline (the string lexer has no escapes) | those characters become `_` | `note`: 「有引号或换行，不能原样写出」 |
 | a monitor whose id is not registered in `target.variables` (hand-edited files) | falls back to `monitor.variableName` | `problem`: 「未在工程中注册」 |
 | a monitor with `x: null` (auto-positioned) | `显示变量(名, "模式")` without coordinates | `note` |
 
-`目标/角色` names, costume/sound files and broadcast names all go through the same
-decompiler-safe rename pass as variables, so the output always re-compiles.
+Variables, lists, broadcasts and custom blocks still go through the decompiler-safe rename pass;
+sprite names do not (they are read up to the colon, so they can keep their spaces), and the stage's
+own name is fixed to `Stage` (a note when the file says otherwise).
 
 ## Verification
 
@@ -76,7 +80,10 @@ decompiler-safe rename pass as variables, so the output always re-compiles.
   values + numeric literals + subtree shape, identifiers masked), the `surface` (target names,
   variable/list/broadcast name sets, monitor `mode/visible/x/y/spriteName`), and the target count.
   Plus the tag-3 pin, the `否则:`-body pin, a foreign-project fixture (unknown opcode, unregistered
-  monitor, dangling reporter, list with contents → must produce problems, not silence), the CLI
+  monitor, dangling reporter, list with contents → must produce problems, not silence), the **本体属性
+  pins** (the fixture's x/y/size/direction/rotation/drag/volume/currentCostume must be emitted as
+  declarations and a `编译→反解→再编译` build must report the same values, incl. two costumes sharing
+  one md5ext — de-duping those lines used to shrink 造型数), the CLI
   end-to-end, and JSON-vs-zip byte equality.
 - `npm run smoke` — the desktop path: the 文件 menu item exists on `Ctrl+Shift+O`, the toolbar
   button works, `smoke.sb3` decompiles to `角色 球:` + `当绿旗被点击:`, the summary line renders,
@@ -88,4 +95,5 @@ decompiler-safe rename pass as variables, so the output always re-compiles.
   shadow blocks (Scratch stores a shadow next to every plugged expression, we do not) and
   `Target.blocks` itself (a BlockContainer — count `t.blocks._blocks`, or every target reports 4).
   Measured: `Stretch.sb3` (foreign, 30 blocks) 15/15, `asteroids` double round trip (543 blocks,
-  7 targets, 11 monitors) 45/45.
+  7 targets, 11 monitors) 45/45, and a real hand-made project (5 targets / 5 blocks, `Sprite 1`
+  kept by name, one sprite at 36,28 with `currentCostume 4`) 33/33 with `problems 0` on the way back.
