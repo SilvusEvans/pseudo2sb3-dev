@@ -16,6 +16,9 @@ const flag = n => {
   const i = argv.indexOf(n);
   return i < 0 ? null : argv[i + 1];
 };
+// --json takes no value, so flag() would read the next argument (or nothing) and the
+// documented switch would silently do nothing but print the text table.
+const hasFlag = n => argv.includes(n);
 const VALUE_FLAGS = ['--grep', '--group', '--lang'];
 const positional = argv.filter((a, i) => !a.startsWith('--') && !(i > 0 && VALUE_FLAGS.includes(argv[i - 1])));
 const REPO = positional[0] || process.env.PSEUDO2SB3_REPO || process.cwd();
@@ -54,7 +57,7 @@ if (grep) {
     || (r.slots || []).join(' ').toLowerCase().includes(g));
 }
 
-if (flag('--json')) {
+if (hasFlag('--json')) {
   console.log(JSON.stringify(rows, null, 1));
   process.exit(0);
 }

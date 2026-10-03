@@ -154,6 +154,12 @@ if (wantOp) {
 
 console.log(`${path.basename(file)}  ·  project.json ${pj.length} B · zip 内 ${zip.size} 个文件（素材 ${zip.size - 1}）`);
 console.log(`semver ${project.meta && project.meta.semver} · 扩展 ${(project.extensions || []).join(', ') || '无'}`);
+const mons = project.monitors || [];
+console.log(`监视器（打开项目时 HUD 上就有的表头）${mons.length} 个:`);
+for (const m of mons) {
+  const what = m.params ? Object.entries(m.params).map(([k, v]) => `${k}=${v}`).join(' ') : '';
+  console.log(`  ${String(m.mode).padEnd(7)} ${m.opcode} ${what}${m.spriteName ? `  [角色 ${m.spriteName}]` : ''}  x=${m.x} y=${m.y}${m.visible ? '' : '  [隐藏]'}${m.mode === 'slider' ? `  范围 ${m.sliderMin}–${m.sliderMax}` : ''}`);
+}
 for (const t of project.targets) {
   const hats = Object.values(t.blocks).filter(b => b.topLevel).length;
   console.log(`  ${t.isStage ? '[舞台]' : '[角色]'} ${t.name}: 积木 ${Object.keys(t.blocks).length} · 脚本 ${hats} · 变量 ${Object.keys(t.variables || {}).length} · 列表 ${Object.keys(t.lists || {}).length} · 造型 ${t.costumes.length} · 声音 ${t.sounds.length}`);
