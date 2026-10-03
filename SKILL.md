@@ -1,6 +1,6 @@
 ---
 name: pseudo2sb3-dev
-description: Develop or use pseudo2sb3, the "pseudocode → Scratch .sb3" tool (Electron; compiles to TurboWarp + Stretch; UI and pseudocode support 简体中文/繁體中文/English/日本語; brand SilvusEvans) — write .pseudo tutorial scripts, compile and export .sb3 from the CLI, decompile a .sb3 back into pseudocode (反解), add blocks to the compiler / change the DSL / change emission shape, add or change a language's UI strings and block aliases, inspect any .sb3's slots and variable registration, verify a real TurboWarp web import by actually running it, package a Windows portable exe. Use when the user mentions pseudo2sb3, 伪代码转 sb3, 反解 / 逆向解析 / decompile, Scratch block metadata/catalog/别名与下拉菜单, 多语言/i18n, TurboWarp 导入验证, or asks how a block's slot/menu should be emitted. This skill's documentation is also maintained as translated mirrors (SKILL.zh-Hans.md / SKILL.zh-Hant.md / SKILL.ja.md) — see the "Documentation language" section; the English SKILL.md stays the authoritative master.
+description: Develop or use pseudo2sb3, the "pseudocode → Scratch .sb3" tool (Electron; compiles to TurboWarp + Stretch; UI and pseudocode support 简体中文/繁體中文/English/日本語; brand SilvusEvans) — write .pseudo tutorial scripts, compile and export .sb3 from the CLI, decompile a .sb3 back into pseudocode (反解), add blocks to the compiler / change the DSL / change emission shape, add or change a language's UI strings and block aliases, inspect any .sb3's slots and variable registration, verify a real TurboWarp web import by actually running it, package a Windows portable exe. Use when the user mentions pseudo2sb3, 伪代码转 sb3, 反解 / 逆向解析 / decompile, Scratch block metadata/catalog/别名与下拉菜单, 多语言/i18n, TurboWarp 导入验证, or asks how a block's slot/menu should be emitted. This skill's documentation ships in English only; the author's working copy additionally keeps translated reading mirrors (SKILL.zh-Hans.md / SKILL.zh-Hant.md / SKILL.ja.md) — see the "Documentation language" section; the English SKILL.md stays the authoritative master.
 argument-hint: "[.pseudo path | block to add | repo dir]"
 ---
 
@@ -186,7 +186,7 @@ the multilingual labels for the `drum` / `instrument` menus are hand-maintained 
 
 ## Documentation language (translated mirrors)
 
-The English master is `SKILL.md`. For reading, this directory also carries a Simplified-Chinese (`SKILL.zh-Hans.md`), Traditional-Chinese (`SKILL.zh-Hant.md`) and Japanese (`SKILL.ja.md`) mirror.
+The English master is `SKILL.md`, and it is the only documentation language this release ships. The author's working copy additionally carries a Simplified-Chinese (`SKILL.zh-Hans.md`), Traditional-Chinese (`SKILL.zh-Hant.md`) and Japanese (`SKILL.ja.md`) reading mirror; install the English master and this section if you want to keep mirrors of your own.
 Maintenance rule: edit only the master `SKILL.md`, then sync each mirror; a mirror translates only the narrative prose — opcodes, DSL keywords, filenames, command lines, and verbatim-quoted errors/user reports stay in the original.
 The runtime loads only `SKILL.md`; the mirrors do not take part in skill triggering. To add another doc language: copy the master, translate the prose, and list the file in this section. (Note this is documentation-level multilinguality, separate from the tool's own UI/DSL i18n.)
 
