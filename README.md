@@ -28,6 +28,7 @@ Drop the folder into your agent's skills directory — for WorkBuddy AI that is
 | `references/decompile.md` | The reverse path `.sb3 → pseudocode`: CLI/desktop entry points, the slot-tag table (incl. the obscured-shadow trap), which saved body attributes round-trip as declarations and what the DSL still cannot express, and the three verification layers |
 | `references/sb3-format.md` | How the emitted `.sb3` block graph is shaped: slot encoding, primitive type numbers, variables/lists registered by key, static dropdowns vs shadow menus |
 | `references/workflow.md` | Adding a block (the 6 steps), historical lessons, the verification chain, verifying TurboWarp in a real browser, packaging checks |
+| `references/scratch-turbowarp.md` | Plain Scratch / TurboWarp platform notes (pseudo2sb3-agnostic): stage geometry, the 300-clone cap, clone inheritance, broadcast restart semantics, warp limits, fps & the 75% scheduler, effects, sound formats, input quirks, a performance table and a common-trap cheat sheet — every claim labelled measured / general / contested |
 | `scripts/vocab.mjs` | Dumps the block vocabulary from a repo's own catalog — `--grep`, `--group`, `--lang`, `--json` |
 | `scripts/inspect-sb3.mjs` | Zero-dependency `.sb3` unpack and structural self-check; works on any project |
 | `scripts/turbowarp-verify.mjs` | Real-browser check: injects a `.sb3` into turbowarp.org, drives real keys, asserts the run and screenshots the stage |
