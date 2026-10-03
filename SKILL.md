@@ -8,7 +8,7 @@ argument-hint: "[.pseudo path | block to add | repo dir]"
 
 ## Overview
 
-Compiles pseudocode (`.pseudo`) into `.sb3` files that TurboWarp/Scratch can open and run directly, for SilvusEvans's advanced Scratch tutorial videos (the brand was originally Harvesbit, since renamed). The desktop app is Electron; the CLI is `node src/cli.js`.
+Compiles pseudocode (`.pseudo`) into `.sb3` files that TurboWarp/Scratch can open and run directly, for SilvusEvans's advanced Scratch tutorial videos. The desktop app is Electron; the CLI is `node src/cli.js`.
 
 > `<repo dir>` / `<temp dir>` / `<skill dir>` below are **placeholders** — replace them with
 > your own paths. The repo keeps **no git of its own**, so copy it somewhere before bulk edits.
